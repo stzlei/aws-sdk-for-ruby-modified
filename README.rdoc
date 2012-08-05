@@ -1,8 +1,7 @@
 = Modification Made on Top of the Official AWS SDK for Ruby
 
-1. Added S3::S3Object::copy_from_versioned() to return ObjectVersion
-   when versioning is enabled, or return the object if versioning is
-   disabled.
+  1. Added S3::S3Object::copy_from_versioned() as a modified version of S3::S3Object::copy_from()
+     It returns ObjectVersion when versioning is enabled. Otherwise, it returns the object itself.
 
 = How to Use it
 
@@ -12,4 +11,6 @@
 
 = Official AWS SDK
 
-  Offiical AWS SDK is at https://github.com/amazonwebservices/aws-sdk-for-ruby
+  Offiical AWS SDK can be found at:
+
+    https://github.com/amazonwebservices/aws-sdk-for-ruby
