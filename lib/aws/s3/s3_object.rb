@@ -558,13 +558,13 @@ module AWS
         copy_opts = { :bucket_name => bucket.name, :key => key }
 
         copy_opts[:copy_source] = case source
-        when S3Object 
+        when S3Object
           "#{source.bucket.name}/#{source.key}"
-        when ObjectVersion 
+        when ObjectVersion
           copy_opts[:version_id] = source.version_id
           "#{source.object.bucket.name}/#{source.object.key}"
         else
-          case 
+          case
           when options[:bucket]      then "#{options[:bucket].name}/#{source}"
           when options[:bucket_name] then "#{options[:bucket_name]}/#{source}"
           else "#{self.bucket.name}/#{source}"
@@ -588,7 +588,7 @@ module AWS
         copy_opts[:server_side_encryption] =
           options[:server_side_encryption] if
           options.key?(:server_side_encryption)
-        copy_opts[:cache_control] = options[:cache_control] if 
+        copy_opts[:cache_control] = options[:cache_control] if
           options[:cache_control]
         add_configured_write_options(copy_opts)
 
@@ -603,6 +603,125 @@ module AWS
         nil
 
       end
+
+      # Copies data from one S3 object to another.
+      #
+      # S3 handles the copy so the clients does not need to fetch the data
+      # and upload it again.  You can also change the storage class and
+      # metadata of the object when copying.
+      #
+      # @note This operation does not copy the ACL, storage class
+      #   (standard vs. reduced redundancy) or server side encryption
+      #   setting from the source object.  If you don't specify any of
+      #   these options when copying, the object will have the default
+      #   values as described below.
+      #
+      # @param [Mixed] source
+      #
+      # @param [Hash] options
+      #
+      # @option options [String] :bucket_name The name of the bucket
+      #   the source object can be found in.  Defaults to the current
+      #   object's bucket.
+      #
+      # @option options [Bucket] :bucket The bucket the source object
+      #   can be found in.  Defaults to the current object's bucket.
+      #
+      # @option options [Hash] :metadata A hash of metadata to save
+      #   with the copied object.  Each name, value pair must conform
+      #   to US-ASCII.  When blank, the sources metadata is copied.
+      #
+      # @option options [String] :content_type The content type of
+      #   the copied object.  Defaults to the source object's content
+      #   type.
+      #
+      # @option options [Boolean] :reduced_redundancy (false) If true the
+      #   object is stored with reduced redundancy in S3 for a lower cost.
+      #
+      # @option options [String] :version_id (nil) Causes the copy to
+      #   read a specific version of the source object.
+      #
+      # @option options [Symbol] :acl (private) A canned access
+      #   control policy.  Valid values are:
+      #
+      #   * +:private+
+      #   * +:public_read+
+      #   * +:public_read_write+
+      #   * +:authenticated_read+
+      #   * +:bucket_owner_read+
+      #   * +:bucket_owner_full_control+
+      #
+      # @option options [Symbol] :server_side_encryption (nil) If this
+      #   option is set, the object will be stored using server side
+      #   encryption.  The only valid value is +:aes256+, which
+      #   specifies that the object should be stored using the AES
+      #   encryption algorithm with 256 bit keys.  By default, this
+      #   option uses the value of the +:s3_server_side_encryption+
+      #   option in the current configuration; for more information,
+      #   see {AWS.config}.
+      #
+      # @option options :cache_control [String] Can be used to specify
+      #   caching behavior.  See
+      #   http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.9
+      #
+      # @return [S3Object, ObjectVersion] If the bucket has versioning
+      #   enabled, returns the {ObjectVersion} representing the
+      #   version that was copied.  If versioning is disabled,
+      #   returns self.
+      #
+      def copy_from_versioned source, options = {}
+
+        copy_opts = { :bucket_name => bucket.name, :key => key }
+
+        copy_opts[:copy_source] = case source
+                                    when S3Object
+                                      "#{source.bucket.name}/#{source.key}"
+                                    when ObjectVersion
+                                      copy_opts[:version_id] = source.version_id
+                                      "#{source.object.bucket.name}/#{source.object.key}"
+                                    else
+                                      case
+                                        when options[:bucket]      then "#{options[:bucket].name}/#{source}"
+                                        when options[:bucket_name] then "#{options[:bucket_name]}/#{source}"
+                                        else "#{self.bucket.name}/#{source}"
+                                      end
+                                  end
+
+        copy_opts[:metadata_directive] = 'COPY'
+
+        if options[:metadata]
+          copy_opts[:metadata] = options[:metadata]
+          copy_opts[:metadata_directive] = 'REPLACE'
+        end
+
+        if options[:content_type]
+          copy_opts[:content_type] = options[:content_type]
+          copy_opts[:metadata_directive] = "REPLACE"
+        end
+
+        copy_opts[:acl] = options[:acl] if options[:acl]
+        copy_opts[:version_id] = options[:version_id] if options[:version_id]
+        copy_opts[:server_side_encryption] =
+            options[:server_side_encryption] if
+            options.key?(:server_side_encryption)
+        copy_opts[:cache_control] = options[:cache_control] if
+            options[:cache_control]
+        add_configured_write_options(copy_opts)
+
+        if options[:reduced_redundancy]
+          copy_opts[:storage_class] = 'REDUCED_REDUNDANCY'
+        else
+          copy_opts[:storage_class] = 'STANDARD'
+        end
+
+        resp = client.copy_object(copy_opts)
+        if resp.data[:version_id]
+          ObjectVersion.new(self, resp.data[:version_id])
+        else
+          self
+        end
+      end
+
 
       # Copies data from the current object to another object in S3.
       #
@@ -677,7 +796,7 @@ module AWS
 
         target.copy_from(self, copy_opts)
         target
-        
+
       end
 
       # Fetches the object data from S3.
